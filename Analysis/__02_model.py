@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.manifold import TSNE
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, BatchNormalization, Conv1D, MaxPooling1D, LSTM, Dense, Dropout, Concatenate, Multiply
@@ -113,7 +113,7 @@ def train_LateFusion(X_GAMMA, X_BETA, Y, selected_channels, dataset_type, num_cl
     epochs (int): Number of training epochs.
     batch_size (int): Batch size for training.
 
-    Returns:
+    Returns:Analysis/DomainAdaptation.ipynb
     float: Late fusion accuracy.
     """
     # Train the GAMMA model
@@ -450,3 +450,35 @@ def train_Attention_LateFusion(X_GAMMA, X_BETA, Y, selected_channels, dataset_ty
     plt.show()
 
     return attention_fusion_accuracy
+
+def plot_confusion_matrix(model, X, Y, num_classes=10, dataset_type=None):
+    """
+    Plot the confusion matrix for a model's predictions on the test dataset.
+
+    Parameters:
+    model (Model): Trained Keras model.
+    X (numpy.ndarray): Feature matrix of shape (n_samples, n_timepoints, n_channels).
+    Y (numpy.ndarray): True labels corresponding to each sample.
+    num_classes (int): Number of output classes for classification.
+    dataset_type (str): Name of the dataset type, e.g., 'alphabet', 'digit'.
+
+    Returns:
+    None: Displays the confusion matrix plot.
+    """
+    # Predict the class labels
+    Y_pred = model.predict(X)
+    Y_pred_classes = Y_pred.argmax(axis=1)  # Convert probabilities to class predictions
+
+    # Compute the confusion matrix
+    conf_matrix = confusion_matrix(Y, Y_pred_classes)
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(8, 8))
+    disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=range(num_classes))
+    disp.plot(cmap=plt.cm.Blues, ax=plt.gca())
+    plt.title(f'Confusion Matrix of {dataset_type} Dataset')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.grid(False)
+    plt.show()
+
