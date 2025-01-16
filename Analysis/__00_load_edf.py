@@ -32,7 +32,7 @@ def load_alphabet(folder_path):
             arr = data.ch_names[2:16]
             print("Relevant Channels:", arr)
         
-        raw_data = data[2:16][0] * 1000  # Select channels and scale
+        raw_data = data[2:16][0]  # Select channels without scaling
         raw_data = raw_data[:, 0:1280]  # Truncate to 1280 samples
         
         _, cls = fi.split('_')
@@ -61,6 +61,7 @@ def load_alphabet(folder_path):
         ctr += 1
 
     return X, Y, arr
+
 
 
 def load_digits(folder_path):

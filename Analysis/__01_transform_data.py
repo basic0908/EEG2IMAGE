@@ -3,7 +3,8 @@ import mne
 import contextlib
 import sys
 import os
-from scipy.signal import butter, filtfilt, iirnotch
+from scipy.signal import butter, filtfilt, iirnotch, welch
+from scipy.interpolate import interp1d
 import pywt
 
 
@@ -328,3 +329,70 @@ def apply_ica_eeg(data):
             transformed_data[trial, channel, :] = transformed_signal.ravel()
     
     return transformed_data
+
+def apply_filter(eeg_data, lowcut=4.0, highcut=40.0, fs=1280):
+    """
+    Applies a bandpass filter to the EEG data to retain only 4-40 Hz.
+
+    Parameters:
+        eeg_data (numpy.ndarray): The EEG data array of shape (instances, channels, datapoints).
+        lowcut (float): The lower bound of the frequency range (default: 4 Hz).
+        highcut (float): The upper bound of the frequency range (default: 40 Hz).
+        fs (int): The sampling frequency of the EEG data (default: 1280 Hz).
+
+    Returns:
+        numpy.ndarray: The filtered EEG data with the same shape as the input.
+    """
+    def butter_bandpass(lowcut, highcut, fs, order=5):
+        nyquist = 0.5 * fs
+        low = lowcut / nyquist
+        high = highcut / nyquist
+        b, a = butter(order, [low, high], btype='band')
+        return b, a
+
+    def bandpass_filter(data, b, a):
+        return filtfilt(b, a, data, axis=-1)
+
+    # Design the bandpass filter
+    b, a = butter_bandpass(lowcut, highcut, fs)
+
+    # Apply the filter to each instance and channel
+    filtered_data = np.empty_like(eeg_data)
+    for i in range(eeg_data.shape[0]):  # Iterate over instances
+        for j in range(eeg_data.shape[1]):  # Iterate over channels
+            filtered_data[i, j, :] = bandpass_filter(eeg_data[i, j, :], b, a)
+
+    return filtered_data
+
+import numpy as np
+from scipy.signal import butter, filtfilt
+
+def remove_offset(data, sampling_rate=128):
+    """
+    Apply a 0.16 Hz first-order high-pass filter to remove background signal (offset).
+
+    Parameters:
+    - data (numpy.ndarray): Input signal with shape (instances, channels, samples).
+    - sampling_rate (int): Sampling rate of the EEG data in Hz (default is 128 Hz).
+
+    Returns:
+    - filtered_data (numpy.ndarray): Offset-removed signal with the same shape as input.
+    """
+    # Define the high-pass filter parameters
+    cutoff = 0.16  # High-pass filter cutoff frequency in Hz
+    order = 1  # First-order filter
+
+    # Normalize the cutoff frequency
+    nyquist = 0.5 * sampling_rate
+    normal_cutoff = cutoff / nyquist
+
+    # Design the Butterworth filter
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+
+    # Apply the filter to each instance and channel
+    filtered_data = np.empty_like(data)
+    for i in range(data.shape[0]):  # Iterate over instances
+        for j in range(data.shape[1]):  # Iterate over channels
+            filtered_data[i, j] = filtfilt(b, a, data[i, j])  # Apply the filter
+
+    return filtered_data

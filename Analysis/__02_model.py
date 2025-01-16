@@ -9,68 +9,84 @@ from tensorflow.keras.utils import to_categorical
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def train(X, Y, dataset_type, num_classes=10, epochs=500, batch_size=128, type='FullBand', channels='two_channel'):
+def train(X, Y, dataset_type, num_classes=10, epochs=500, batch_size=128, 
+          data_split_seed=42, model_type='FullBand', channels='two_channel'):
     """
     Train a model for Envisioned Speech Recognition and evaluate its final performance.
 
     Parameters:
-    X (numpy.ndarray): Feature matrix of shape (n_samples, n_timepoints, n_channels).
-    Y (numpy.ndarray): Labels corresponding to each sample.
-    dataset_type (str): Type of dataset, e.g., 'digit', 'alphabet', or 'object'.
-    num_classes (int): Number of output classes for classification.
-    epochs (int): Number of training epochs.
-    batch_size (int): Batch size for training.
+        X (numpy.ndarray): Feature matrix of shape (n_samples, n_timepoints, n_channels).
+        Y (numpy.ndarray): Labels corresponding to each sample.
+        dataset_type (str): Type of dataset, e.g., 'digit', 'alphabet', or 'object'.
+        num_classes (int): Number of output classes for classification.
+        epochs (int): Number of training epochs.
+        batch_size (int): Batch size for training.
+        data_split_seed (int): Random seed for dataset splitting.
+        model_type (str): Model type identifier for saving the model.
+        channels (str): Descriptor for the channel setup (e.g., 'two_channel').
 
     Returns:
-    Model: Trained Keras model.
+        Model: Trained Keras model.
+        X_test (numpy.ndarray): Test feature matrix.
+        Y_test (numpy.ndarray): Test labels.
     """
-    from tensorflow.keras.utils import to_categorical
-    from tensorflow.keras.models import Model, load_model
-    from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, LSTM, Dense, Dropout, BatchNormalization
-    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-    from sklearn.model_selection import train_test_split
-    import matplotlib.pyplot as plt
 
-    # Ensure the input shape matches the selected channels
-    input_shape = (X.shape[1], X.shape[2])  # No need to filter channels again
-    i1 = Input(shape=input_shape)
-    x1 = BatchNormalization()(i1)
-    x1 = Conv1D(128, kernel_size=10, strides=1, activation='relu', padding='same')(x1)
-    x1 = BatchNormalization()(x1)
-    x1 = MaxPooling1D(2)(x1)
-    x1 = LSTM(256, activation='tanh')(x1)
-    x1 = BatchNormalization()(x1)
-    x1 = Dense(128, activation='relu')(x1)
-    x1 = Dropout(0.5)(x1)
-    output = Dense(num_classes, activation='softmax')(x1)
-    model = Model(inputs=i1, outputs=output)
+    # Ensure labels are categorical
+    Y_categorical = to_categorical(Y, num_classes=num_classes)
+
+    # Split the data into training, validation, and test sets
+    X_train, X_test, Y_train, Y_test = train_test_split(
+        X, Y_categorical, test_size=0.2, random_state=data_split_seed, stratify=Y
+    )
+
+    X_train, X_val, Y_train, Y_val = train_test_split(
+        X_train, Y_train, test_size=0.2, random_state=data_split_seed, stratify=np.argmax(Y_train, axis=1)
+    )
+
+    # Define input shape
+    input_shape = (X.shape[1], X.shape[2])
+
+    # Build the model
+    inputs = Input(shape=input_shape)
+    x = BatchNormalization()(inputs)
+    x = Conv1D(128, kernel_size=10, strides=1, activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    x = MaxPooling1D(pool_size=2)(x)
+    x = LSTM(256, activation='tanh', return_sequences=False)(x)
+    x = BatchNormalization()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    outputs = Dense(num_classes, activation='softmax')(x)
+
+    model = Model(inputs, outputs)
 
     # Compile the model
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-    # Split the data into training and test sets
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=1)
-
-    # Define early stopping and model checkpoint
-    es = EarlyStopping(monitor='val_accuracy', verbose=1, patience=10)
-    checkpoint_path = f"model/{channels}/model_{dataset_type}_{type}.keras"
-    mc = ModelCheckpoint(checkpoint_path, save_best_only=True, verbose=1)
+    # Define callbacks
+    checkpoint_path = f"model/{channels}/model_{dataset_type}_{model_type}.keras"
+    callbacks = [
+        EarlyStopping(monitor='val_accuracy', patience=10, verbose=1, restore_best_weights=True),
+        ModelCheckpoint(filepath=checkpoint_path, save_best_only=True, verbose=1)
+    ]
 
     # Train the model
-    history = model.fit(X_train, y=to_categorical(Y_train, num_classes=num_classes),
-                        validation_split=0.2, epochs=epochs, batch_size=batch_size,
-                        verbose=1, callbacks=[es, mc])
-
-    # Load the best model from the checkpoint
-    best_model = load_model(checkpoint_path)
+    history = model.fit(
+        X_train, Y_train,
+        validation_data=(X_val, Y_val),
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=callbacks,
+        verbose=1
+    )
 
     # Evaluate the model on the test set
-    test_loss, test_accuracy = best_model.evaluate(X_test, to_categorical(Y_test, num_classes=num_classes), verbose=1)
+    test_loss, test_accuracy = model.evaluate(X_test, Y_test, verbose=1)
     print(f"\nFinal Test Performance:")
     print(f"Test Accuracy: {test_accuracy:.4f}")
     print(f"Test Loss: {test_loss:.4f}")
 
-    # Plot training and validation accuracy and loss
+    # Plot training and validation metrics
     plt.figure(figsize=(12, 5))
 
     # Plot Accuracy
@@ -94,7 +110,8 @@ def train(X, Y, dataset_type, num_classes=10, epochs=500, batch_size=128, type='
     plt.tight_layout()
     plt.show()
 
-    return best_model, X_test, Y_test
+    return model, X_test, np.argmax(Y_test, axis=1)
+
 
 
 

@@ -81,9 +81,24 @@ def load_alphabet(folder_path):
     return X, Y
 
 def load_object(folder_path):
+    """
+    Load object data from CSV files in a folder.
+
+    Parameters:
+        folder_path (str): Path to the folder containing CSV files.
+
+    Returns:
+        tuple: X (numpy.ndarray), Y (numpy.ndarray)
+    """
     # Initialize X and Y
     X = np.zeros((220, 2, 6000))  # Shape (220, 2, 6000)
     Y = np.zeros(220, dtype=int)  # Shape (220,)
+    
+    # Object class mapping
+    object_classes = {
+        "Apple": 0, "Car": 1, "Dog": 2, "Gold": 3, "Mobile": 4,
+        "Rose": 5, "Scooter": 6, "Tiger": 7, "Wallet": 8, "Watch": 9
+    }
     
     # Loop through all CSV files in the folder
     for ctr, file in enumerate(sorted(os.listdir(folder_path))):
@@ -95,34 +110,25 @@ def load_object(folder_path):
             X[ctr] = df.iloc[:, :2].values.T[:, :6000]
             
             # Determine the class for Y based on the file name
-            _, cls = file.split('_')
-            cls = cls.strip()
-            if cls == 'Apple.edf':
-                Y[ctr] = 0
-            elif cls == 'Car.edf':
-                Y[ctr] = 1
-            elif cls == 'Dog.edf':
-                Y[ctr] = 2
-            elif cls == 'Gold.edf':
-                Y[ctr] = 3
-            elif cls == 'Mobile.edf':
-                Y[ctr] = 4
-            elif cls == 'Rose.edf':
-                Y[ctr] = 5
-            elif cls == 'Scooter.edf':
-                Y[ctr] = 6
-            elif cls == 'Tiger.edf':
-                Y[ctr] = 7
-            elif cls == 'Wallet.edf':
-                Y[ctr] = 8
-            elif cls == 'Watch.edf':
-                Y[ctr] = 9
-            else:
+            try:
+                cls = file.split('_')[-1].split('.')[0]  # Extract class and remove extension
+                Y[ctr] = object_classes[cls.strip()]  # Map object name to label
+            except KeyError:
                 raise ValueError(f"Invalid object class in file name: {file}")
     
     return X, Y
 
+
 def load_digit(folder_path):
+    """
+    Load digit data from CSV files in a folder.
+
+    Parameters:
+        folder_path (str): Path to the folder containing CSV files.
+
+    Returns:
+        tuple: X (numpy.ndarray), Y (numpy.ndarray)
+    """
     # Initialize X and Y
     X = np.zeros((220, 2, 6000))  # Shape (220, 2, 6000)
     Y = np.zeros(220, dtype=int)  # Shape (220,)
@@ -137,10 +143,11 @@ def load_digit(folder_path):
             X[ctr] = df.iloc[:, :2].values.T[:, :6000]
             
             # Determine the class for Y based on the file name
-            cls = file.split('_')[1]  # Assuming folder name contains the class
             try:
-                Y[ctr] = int(cls)  # Parse numeric class directly
-            except ValueError:
-                raise ValueError(f"Invalid digit class in file name: {file}")
+                cls = file.split('_')[1].split('.')[0]  # Extract class and remove extension
+                Y[ctr] = int(cls.strip())  # Parse numeric class directly
+            except (IndexError, ValueError):
+                print(f"Skipping invalid file: {file}")
+                continue
     
     return X, Y
